@@ -3,7 +3,6 @@ import 'package:app/Auth/Login.dart';
 import 'package:app/Auth/SignUp.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'Pages/SplashScreen.dart';
 import 'Pages/VolunteerHome.dart';
@@ -78,6 +77,7 @@ class MyApp extends StatelessWidget {
       routes: {
         "volunteerHome": (context) => const VolunteerHome(),
         "userHome": (context) => const UserHome(),
+        "splashPage": (context) => const SplashScreen(),
         "login": (context) => const Login(userType: ''),
         "signup": (context) => const SignUp(userType: ''),
       },
