@@ -1,4 +1,5 @@
 import 'package:app/Pages/settingPage.dart';
+import 'package:app/AgoraLogic/agora_logic.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +18,8 @@ class _VolunteerHomeState extends State<VolunteerHome> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FlutterTts flutterTts = FlutterTts();
 
+  AgoraLogic? _agoraLogic;
+
   String userName = '';
   String userEmail = '';
 
@@ -32,6 +35,12 @@ class _VolunteerHomeState extends State<VolunteerHome> {
   void initState() {
     super.initState();
     _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _agoraLogic?.cleanup();
+    super.dispose();
   }
 
   Future<void> _speak(String text) async {
@@ -59,14 +68,13 @@ class _VolunteerHomeState extends State<VolunteerHome> {
 
   Stream<QuerySnapshot> getRequestsStream() {
     return _firestore
-        .collection('users')
-        .where('userType', isEqualTo: 'user')
-        .where('requestStatus', isEqualTo: 'pending')
+        .collection('requests')
+        .where('status', isEqualTo: 'pending')
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
-  void _acceptRequest(Map<String, dynamic> request) {
+  Future<void> _acceptRequest(Map<String, dynamic> request) async {
     if (inCall) return;
 
     setState(() {
@@ -77,31 +85,85 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     });
     _speak("Connecting with ${request['userName']}");
 
-    _firestore.collection('users').doc(request['requestId']).update({
-      'requestStatus': 'accepted',
-      'volunteerId': _auth.currentUser?.uid,
-      'volunteerName': userName,
-      'acceptedAt': FieldValue.serverTimestamp(),
-    }).catchError((e) {
-      debugPrint('Failed to update request status: $e');
-    });
+    // Initialize Agora
+    // TODO: Replace with your actual Agora App ID
+    const String agoraAppId = 'ad016719e08149d3b8176049cbbe8024';
+    _agoraLogic = AgoraLogic(
+      appId: agoraAppId,
+      channel:
+          'test_channel', // TODO: Use a dynamic channel ID based on the request
+      onRemoteUserJoined: (uid) {
+        if (mounted) {
+          setState(() {
+            // Trigger rebuild to show remote video
+          });
+        }
+      },
+      onRemoteUserLeft: (uid) {
+        if (mounted) {
+          setState(() {
+            // Trigger rebuild to hide remote video
+          });
+        }
+      },
+    );
 
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      await _agoraLogic!.initialize();
+      await _agoraLogic!.requestPermissions();
+      await _agoraLogic!.setupLocalVideo();
+      await _agoraLogic!.joinChannel();
+
+      // Update Firestore status
+      await _firestore.collection('requests').doc(request['requestId']).update({
+        'status': 'accepted',
+        'volunteerId': _auth.currentUser?.uid,
+        'volunteerName': userName,
+        'acceptedAt': FieldValue.serverTimestamp(),
+      });
+
       setState(() {
         connectionStatus = "Live";
       });
       _speak("Call is live");
-    });
+    } catch (e) {
+      debugPrint("Error initializing Agora or updating Firestore: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Connection failed: $e")));
+      }
+      // Cleanup if partial failure
+      await _agoraLogic?.cleanup();
+      _agoraLogic = null;
+
+      setState(() {
+        inCall = false;
+        connectionStatus = "Failed";
+        currentRequestId = null;
+        currentRequestUserName = null;
+      });
+      _speak("Failed to connect call");
+    }
   }
 
-  void endCall() {
+  void endCall() async {
     if (currentRequestId != null) {
-      _firestore.collection('users').doc(currentRequestId).update({
-        'requestStatus': 'completed',
-        'completedAt': FieldValue.serverTimestamp(),
-      }).catchError((e) {
-        debugPrint('Failed to update request status on call end: $e');
-      });
+      _firestore
+          .collection('requests')
+          .doc(currentRequestId)
+          .update({
+            'status': 'completed',
+            'completedAt': FieldValue.serverTimestamp(),
+          })
+          .catchError((e) {
+            debugPrint('Failed to update request status on call end: $e');
+          });
+    }
+
+    if (_agoraLogic != null) {
+      await _agoraLogic!.cleanup();
+      _agoraLogic = null;
     }
 
     setState(() {
@@ -119,6 +181,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     setState(() {
       isMuted = !isMuted;
     });
+    _agoraLogic?.toggleLocalAudio(isMuted);
     _speak(isMuted ? "Microphone muted" : "Microphone unmuted");
   }
 
@@ -126,6 +189,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     setState(() {
       isCameraOff = !isCameraOff;
     });
+    _agoraLogic?.toggleLocalVideo(isCameraOff);
     _speak(isCameraOff ? "Camera turned off" : "Camera turned on");
   }
 
@@ -134,7 +198,9 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('userType');
     if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('splashPage', (route) => false);
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil('splashPage', (route) => false);
   }
 
   void _openSettings() {
@@ -150,8 +216,11 @@ class _VolunteerHomeState extends State<VolunteerHome> {
   }
 
   Widget _buildRequestTile(Map<String, dynamic> req) {
-    final String status = (req['requestStatus'] ?? 'pending').toString().toLowerCase();
-    final bool isAcceptedOrCompleted = status == 'accepted' || status == 'completed';
+    final String status = (req['requestStatus'] ?? 'pending')
+        .toString()
+        .toLowerCase();
+    final bool isAcceptedOrCompleted =
+        status == 'accepted' || status == 'completed';
 
     return Semantics(
       label: 'Request from ${req["userName"]}, status: $status',
@@ -159,7 +228,9 @@ class _VolunteerHomeState extends State<VolunteerHome> {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: Colors.grey[700],
-          backgroundImage: req["userPhoto"] != null ? NetworkImage(req["userPhoto"]) : null,
+          backgroundImage: req["userPhoto"] != null
+              ? NetworkImage(req["userPhoto"])
+              : null,
           child: req["userPhoto"] == null
               ? Text(
                   req["userName"].toString().substring(0, 1).toUpperCase(),
@@ -172,14 +243,17 @@ class _VolunteerHomeState extends State<VolunteerHome> {
         ),
         title: Text(
           req["userName"],
-          style: TextStyle(color: Colors.grey[100], fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: Colors.grey[100],
+            fontWeight: FontWeight.w600,
+          ),
         ),
         subtitle: Text(
           status == 'pending'
               ? "Tap to start video call"
               : status == 'accepted'
-                  ? "Request accepted"
-                  : "Request completed",
+              ? "Request accepted"
+              : "Request completed",
           style: TextStyle(color: Colors.grey[400]),
         ),
         trailing: Column(
@@ -224,7 +298,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
       backgroundColor: darkBackground,
       appBar: AppBar(
         backgroundColor: appBarColor,
-        title: Semantics(header: true, child: const Text("SeeTogether")),
+        title: Semantics(header: true, child: const Text("be my guide")),
         actions: [
           Semantics(
             label: 'Profile settings',
@@ -262,12 +336,12 @@ class _VolunteerHomeState extends State<VolunteerHome> {
             final requests = docs.map((doc) {
               final data = doc.data() as Map<String, dynamic>;
               return {
-                'userName': data['firstName'] ?? 'Unknown',
-                'userPhoto': data['photoUrl'],
+                'userName': data['userName'] ?? 'Unknown',
+                'userPhoto': data['userPhoto'],
                 'contact': data['contact'] ?? '',
                 'timestamp': data['createdAt']?.toDate() ?? DateTime.now(),
                 'requestId': doc.id,
-                'requestStatus': data['requestStatus'] ?? 'pending',
+                'requestStatus': data['status'] ?? 'pending',
               };
             }).toList();
 
@@ -281,7 +355,10 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                   if (!inCall) ...[
                     Text("Hello, $userName!", style: headerTextStyle),
                     const SizedBox(height: 4),
-                    Text("Users requesting assistance:", style: subtitleTextStyle),
+                    Text(
+                      "Users requesting assistance:",
+                      style: subtitleTextStyle,
+                    ),
                     const SizedBox(height: 20),
                   ],
                   if (!inCall)
@@ -291,7 +368,8 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                             physics: const NeverScrollableScrollPhysics(),
                             shrinkWrap: true,
                             itemCount: requests.length,
-                            separatorBuilder: (_, __) => const Divider(color: Colors.grey),
+                            separatorBuilder: (_, __) =>
+                                const Divider(color: Colors.grey),
                             itemBuilder: (context, index) {
                               return _buildRequestTile(requests[index]);
                             },
@@ -299,42 +377,51 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                   if (inCall) ...[
                     const SizedBox(height: 20),
                     Center(
-                      child: Text(connectionStatus,
-                          style: TextStyle(
-                              color: highlightColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18)),
+                      child: Text(
+                        connectionStatus,
+                        style: TextStyle(
+                          color: highlightColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 10),
-                    Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[850],
-                        borderRadius: BorderRadius.circular(12),
+                    if (_agoraLogic != null)
+                      Container(
+                        height: 200,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[850],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: _agoraLogic!.remoteVideoView(),
+                        ),
                       ),
-                      child: Center(
-                          child: Text('${currentRequestUserName} Video',
-                              style: TextStyle(color: Colors.grey[400]))),
-                    ),
                     const SizedBox(height: 10),
-                    Container(
-                      height: 100,
-                      width: 140,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[800],
-                        borderRadius: BorderRadius.circular(8),
+                    if (_agoraLogic != null)
+                      Container(
+                        height: 100,
+                        width: 140,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: _agoraLogic!.localVideoView(),
+                        ),
                       ),
-                      child: Center(
-                          child: Text('Your Self-View',
-                              style: TextStyle(color: Colors.grey[400]))),
-                    ),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Semantics(
-                          label: isMuted ? 'Unmute microphone' : 'Mute microphone',
+                          label: isMuted
+                              ? 'Unmute microphone'
+                              : 'Mute microphone',
                           button: true,
                           child: IconButton(
                             icon: Icon(isMuted ? Icons.mic_off : Icons.mic),
@@ -345,10 +432,14 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                         ),
                         const SizedBox(width: 20),
                         Semantics(
-                          label: isCameraOff ? 'Turn camera on' : 'Turn camera off',
+                          label: isCameraOff
+                              ? 'Turn camera on'
+                              : 'Turn camera off',
                           button: true,
                           child: IconButton(
-                            icon: Icon(isCameraOff ? Icons.videocam_off : Icons.videocam),
+                            icon: Icon(
+                              isCameraOff ? Icons.videocam_off : Icons.videocam,
+                            ),
                             color: highlightColor,
                             iconSize: 32,
                             onPressed: toggleCamera,
@@ -373,7 +464,10 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                             icon: const Icon(Icons.cameraswitch),
                             color: highlightColor,
                             iconSize: 32,
-                            onPressed: () => _speak("Switching camera"),
+                            onPressed: () {
+                              _agoraLogic?.switchCamera();
+                              _speak("Switching camera");
+                            },
                           ),
                         ),
                       ],

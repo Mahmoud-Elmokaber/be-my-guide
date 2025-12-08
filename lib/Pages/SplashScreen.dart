@@ -12,13 +12,14 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   final FlutterTts flutterTts = FlutterTts();
+  String? selectedRole; // 'user' or 'volunteer'
 
   @override
   void initState() {
     super.initState();
 
     // رسالة ترحيبية أول ما الصفحة تظهر
-    _speak("Welcome to SeeTogether app splash screen");
+    _speak("Welcome to be my guide app splash screen");
   }
 
   // دالة لتشغيل الـ TTS
@@ -49,10 +50,7 @@ class _SplashScreenState extends State<SplashScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-          textStyle: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -69,16 +67,85 @@ class _SplashScreenState extends State<SplashScreen> {
             const SizedBox(height: 6),
             Text(
               subtitle,
-              style: const TextStyle(
-                fontSize: 18,
-                color: Colors.white70,
-              ),
+              style: const TextStyle(fontSize: 18, color: Colors.white70),
               textAlign: TextAlign.center,
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget buildRoleButton({
+    required String title,
+    required String subtitle,
+    required String userType,
+    required Color backgroundColor,
+  }) {
+    return Semantics(
+      button: true,
+      label: "$title, $subtitle",
+      hint: "Double tap to activate",
+      child: ElevatedButton(
+        onPressed: () async {
+          await _speak("$title, $subtitle");
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('userType', userType);
+          if (mounted) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => SignUp(userType: userType),
+              ),
+            );
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          minimumSize: const Size(280, 90),
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.white,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 14, color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showUserRoleDialog() async {
+    await _speak("Select your role. Blind or Deaf");
+    setState(() => selectedRole = 'user');
+  }
+
+  Future<void> _showVolunteerRoleDialog() async {
+    await _speak(
+      "Select your volunteer role. General volunteer or Sign language expert",
+    );
+    setState(() => selectedRole = 'volunteer');
+  }
+
+  void _goBack() {
+    setState(() => selectedRole = null);
   }
 
   @override
@@ -96,9 +163,9 @@ class _SplashScreenState extends State<SplashScreen> {
               // App Title مع Semantics
               Semantics(
                 header: true,
-                label: "App name SeeTogether",
+                label: "App name be my guide",
                 child: Text(
-                  "SeeTogether",
+                  "be my guide",
                   style: const TextStyle(
                     fontSize: 26,
                     color: Colors.white,
@@ -140,9 +207,9 @@ class _SplashScreenState extends State<SplashScreen> {
                       // Welcome header
                       Semantics(
                         header: true,
-                        label: "Welcome to SeeTogether",
+                        label: "Welcome to be my guide",
                         child: Text(
-                          'Welcome to SeeTogether',
+                          'Welcome to be my guide',
                           style: const TextStyle(
                             fontSize: 30,
                             color: Colors.white,
@@ -169,33 +236,141 @@ class _SplashScreenState extends State<SplashScreen> {
 
                       const SizedBox(height: 40),
 
-                      // زرار أول
-                      buildButton(
-                        title: "I need visual assistance",
-                        subtitle: "Call a volunteer",
-                        onTap: () async {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString('userType', 'user'); 
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (context) => SignUp(userType: 'user')),
-                          );
-                        },
-                      ),
+                      if (selectedRole == null) ...[
+                        // Button for users needing assistance
+                        buildButton(
+                          title: "I need assistance",
+                          subtitle: "Call a volunteer",
+                          onTap: _showUserRoleDialog,
+                        ),
 
-                      const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                      // زرار ثاني
-                      buildButton(
-                        title: "I'd like to volunteer",
-                        subtitle: "Share your eyesight",
-                        onTap: () async {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString('userType', 'volunteer'); 
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (context) => SignUp(userType: 'volunteer')),
-                          );
-                        },
-                      ),
+                        // Button for volunteers
+                        buildButton(
+                          title: "I'd like to volunteer",
+                          subtitle: "Help others",
+                          onTap: _showVolunteerRoleDialog,
+                        ),
+                      ] else if (selectedRole == 'user') ...[
+                        // User role selection
+                        Semantics(
+                          header: true,
+                          label: "Select your role",
+                          child: Text(
+                            'What is your primary need?',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+
+                        buildRoleButton(
+                          title: "I am Blind",
+                          subtitle: "Need visual assistance",
+                          userType: 'blind',
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            13,
+                            110,
+                            180,
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        buildRoleButton(
+                          title: "I am Deaf",
+                          subtitle: "Need hearing assistance",
+                          userType: 'deaf',
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            13,
+                            110,
+                            180,
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Back button
+                        TextButton(
+                          onPressed: () async {
+                            await _speak("Going back");
+                            _goBack();
+                          },
+                          child: const Text(
+                            '← Back',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ] else if (selectedRole == 'volunteer') ...[
+                        // Volunteer role selection
+                        Semantics(
+                          header: true,
+                          label: "Select your volunteer role",
+                          child: Text(
+                            'What type of volunteer are you?',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+
+                        buildRoleButton(
+                          title: "General Volunteer",
+                          subtitle: "Help blind and deaf users",
+                          userType: 'volunteer',
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            13,
+                            110,
+                            180,
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        buildRoleButton(
+                          title: "Sign Language Expert",
+                          subtitle: "Assist deaf users",
+                          userType: 'sign_language_expert',
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            13,
+                            110,
+                            180,
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Back button
+                        TextButton(
+                          onPressed: () async {
+                            await _speak("Going back");
+                            _goBack();
+                          },
+                          child: const Text(
+                            '← Back',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

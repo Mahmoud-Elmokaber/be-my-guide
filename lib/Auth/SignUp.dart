@@ -84,9 +84,10 @@ class _SignUpState extends State<SignUp> {
                   child: const Text(
                     "Get started",
                     style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 22,
-                        color: Colors.white),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 22,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -107,9 +108,10 @@ class _SignUpState extends State<SignUp> {
                       const Text(
                         "First name",
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.white),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Customtextformfield(
@@ -132,9 +134,10 @@ class _SignUpState extends State<SignUp> {
                       const Text(
                         "Last name",
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.white),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Customtextformfield(
@@ -157,9 +160,10 @@ class _SignUpState extends State<SignUp> {
                       const Text(
                         "Email",
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.white),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Customtextformfield(
@@ -186,9 +190,10 @@ class _SignUpState extends State<SignUp> {
                       const Text(
                         "Password",
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.white),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Customtextformfield(
@@ -204,7 +209,8 @@ class _SignUpState extends State<SignUp> {
                           }
                           if (val.length < 6) {
                             flutterTts.speak(
-                                "Password must be at least 6 characters");
+                              "Password must be at least 6 characters",
+                            );
                             return "Password must be at least 6 characters";
                           }
                           return null;
@@ -216,7 +222,8 @@ class _SignUpState extends State<SignUp> {
                       Center(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                              minimumSize: const Size(200, 50)),
+                            minimumSize: const Size(200, 50),
+                          ),
                           onPressed: () async {
                             // تحقق من صحة الفورم
                             if (!formKey.currentState!.validate()) {
@@ -231,8 +238,9 @@ class _SignUpState extends State<SignUp> {
                             try {
                               await FirebaseAuth.instance
                                   .createUserWithEmailAndPassword(
-                                      email: email.text,
-                                      password: password.text);
+                                    email: email.text,
+                                    password: password.text,
+                                  );
 
                               String uid =
                                   FirebaseAuth.instance.currentUser!.uid;
@@ -241,30 +249,40 @@ class _SignUpState extends State<SignUp> {
                                   .collection('users')
                                   .doc(uid)
                                   .set({
-                                "firstName": firstName.text,
-                                "lastName": lastName.text,
-                                "email": email.text,
-                                "userType": widget.userType,
-                                
-                                "createdAt": FieldValue.serverTimestamp(),
-                              });
+                                    "firstName": firstName.text,
+                                    "lastName": lastName.text,
+                                    "email": email.text,
+                                    "userType": widget.userType,
+                                    "createdAt": FieldValue.serverTimestamp(),
+                                  });
 
                               setState(() => isLoading = false);
 
-                              if (widget.userType == 'user') {
-                                Navigator.of(context)
-                                    .pushReplacementNamed('userHome');
-                              } else {
-                                Navigator.of(context)
-                                    .pushReplacementNamed('volunteerHome');
+                              if (!mounted) return;
+
+                              // Route based on user type
+                              if (widget.userType == 'blind' ||
+                                  widget.userType == 'deaf') {
+                                // User roles go to UserHome
+                                Navigator.of(context).pushNamedAndRemoveUntil(
+                                  "userHome",
+                                  (route) => false,
+                                );
+                              } else if (widget.userType == 'volunteer' ||
+                                  widget.userType == 'sign_language_expert') {
+                                // Volunteer roles go to VolunteerHome
+                                Navigator.of(context).pushNamedAndRemoveUntil(
+                                  "volunteerHome",
+                                  (route) => false,
+                                );
                               }
                             } on FirebaseAuthException catch (e) {
                               setState(() => isLoading = false);
                               flutterTts.speak(e.message ?? "Error occurred");
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                    content: Text(
-                                        e.message ?? "Error occurred")),
+                                  content: Text(e.message ?? "Error occurred"),
+                                ),
                               );
                             }
                           },
@@ -283,8 +301,9 @@ class _SignUpState extends State<SignUp> {
                           const Text(
                             "Have an account?",
                             style: TextStyle(
-                                color: Color.fromARGB(255, 165, 177, 182),
-                                fontSize: 16),
+                              color: Color.fromARGB(255, 165, 177, 182),
+                              fontSize: 16,
+                            ),
                           ),
                           const SizedBox(width: 5),
                           InkWell(
@@ -301,9 +320,10 @@ class _SignUpState extends State<SignUp> {
                             child: const Text(
                               "Login",
                               style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold),
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],

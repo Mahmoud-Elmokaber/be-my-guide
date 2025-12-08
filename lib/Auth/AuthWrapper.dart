@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -28,7 +27,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
     final user = _auth.currentUser;
     if (user != null) {
       try {
-        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
         if (doc.exists) {
           final data = doc.data();
           _userType = data?['userType'] as String?;
@@ -47,7 +49,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: Colors.black,
-        body: const Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
+        body: const Center(
+          child: CircularProgressIndicator(color: Colors.blueAccent),
+        ),
       );
     }
 
@@ -55,9 +59,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const SplashScreen();
     }
 
-    if (_userType == 'user') {
+    // Handle all user types
+    if (_userType == 'blind' || _userType == 'deaf') {
+      // Both deaf and blind users go to UserHome
       return const UserHome();
-    } else if (_userType == 'volunteer') {
+    } else if (_userType == 'volunteer' ||
+        _userType == 'sign_language_expert') {
+      // Both general volunteers and sign language experts go to VolunteerHome
       return const VolunteerHome();
     } else {
       return const SplashScreen();

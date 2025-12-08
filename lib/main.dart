@@ -9,10 +9,8 @@ import 'Pages/VolunteerHome.dart';
 import 'Pages/UserHome.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized(); 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -39,7 +37,9 @@ class MyApp extends StatelessWidget {
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.grey.shade900,
           foregroundColor: const Color.fromARGB(255, 207, 227, 235),
-          iconTheme: const IconThemeData(color: Color.fromARGB(255, 207, 227, 235)),
+          iconTheme: const IconThemeData(
+            color: Color.fromARGB(255, 207, 227, 235),
+          ),
           titleTextStyle: const TextStyle(
             color: Color.fromARGB(255, 207, 227, 235),
             fontSize: 20,

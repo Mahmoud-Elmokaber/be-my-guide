@@ -11,7 +11,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../Components/CustomTextFormField.dart';
 import '../Components/CustomIcon.dart';
 
-
 class Login extends StatefulWidget {
   final String userType;
   const Login({super.key, required this.userType});
@@ -67,17 +66,23 @@ class _LoginState extends State<Login> {
     setState(() => isLoadingWithGoogle = true);
     flutterTts.speak("Signing in with Google");
 
-    final GoogleSignInAuthentication? googleAuth = await googleUser.authentication;
+    final GoogleSignInAuthentication? googleAuth =
+        await googleUser.authentication;
     final credential = GoogleAuthProvider.credential(
       accessToken: googleAuth?.accessToken,
       idToken: googleAuth?.idToken,
     );
 
-    final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+    final userCredential = await FirebaseAuth.instance.signInWithCredential(
+      credential,
+    );
     final user = userCredential.user;
     final uid = user!.uid;
 
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
     if (!doc.exists) {
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         "firstName": googleUser.displayName?.split(' ').first ?? '',
@@ -90,14 +95,27 @@ class _LoginState extends State<Login> {
 
     setState(() => isLoadingWithGoogle = false);
 
-    final prefs = await SharedPreferences.getInstance();
-    final userType = prefs.getString('userType') ?? 'user';
-Navigator.of(context).pushAndRemoveUntil(
-  MaterialPageRoute(
-    builder: (context) => userType == 'user' ? UserHome() : VolunteerHome(),
-  ),
-  (route) => false,
-);
+    // Get the user type from Firestore that was just saved
+    final savedDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    final savedUserType = savedDoc.data()?['userType'] ?? 'blind';
+
+    // Determine which home page to navigate to based on user type
+    Widget homeWidget;
+    if (savedUserType == 'blind' || savedUserType == 'deaf') {
+      homeWidget = const UserHome();
+    } else {
+      homeWidget = const VolunteerHome();
+    }
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => homeWidget),
+      (route) => false,
+    );
   }
 
   // ---------- SIGN IN WITH FACEBOOK ----------
@@ -107,16 +125,14 @@ Navigator.of(context).pushAndRemoveUntil(
       permissions: ['email', 'public_profile'],
     );
 
-    final prefs = await SharedPreferences.getInstance();
-    final userType = prefs.getString('userType') ?? 'user';
-
     if (loginResult.status == LoginStatus.success) {
       final userData = await FacebookAuth.instance.getUserData();
       final OAuthCredential facebookAuthCredential =
           FacebookAuthProvider.credential(loginResult.accessToken!.token);
 
-      final userCredential =
-          await FirebaseAuth.instance.signInWithCredential(facebookAuthCredential);
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        facebookAuthCredential,
+      );
       final user = userCredential.user;
 
       if (user != null) {
@@ -134,15 +150,28 @@ Navigator.of(context).pushAndRemoveUntil(
           'userType': widget.userType,
           'createdAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-      }
 
-      Navigator.of(context).pushReplacementNamed(
-        userType == 'user' ? 'userHome' : 'volunteerHome',
-      );
+        // Get the user type from what was just saved
+        final savedDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+        final savedUserType = savedDoc.data()?['userType'] ?? 'blind';
+
+        if (!mounted) return;
+
+        Navigator.of(context).pushReplacementNamed(
+          (savedUserType == 'blind' || savedUserType == 'deaf')
+              ? 'userHome'
+              : 'volunteerHome',
+        );
+      }
     } else {
       flutterTts.speak("Facebook login failed");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Facebook login failed: ${loginResult.message}')),
+        SnackBar(
+          content: Text('Facebook login failed: ${loginResult.message}'),
+        ),
       );
     }
   }
@@ -167,50 +196,61 @@ Navigator.of(context).pushAndRemoveUntil(
       );
     } catch (e) {
       flutterTts.speak("Error sending password reset email");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     }
   }
 
   // ---------- LOGIN WITH EMAIL ----------
- Future<void> loginWithEmail() async {
-  if (!formKey.currentState!.validate()) return;
+  Future<void> loginWithEmail() async {
+    if (!formKey.currentState!.validate()) return;
 
-  setState(() => isLoading = true);
-  await flutterTts.speak("Logging in");
+    setState(() => isLoading = true);
+    await flutterTts.speak("Logging in");
 
-  try {
-    final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: email.text.trim(),
-      password: password.text,
-    );
+    try {
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email.text.trim(),
+        password: password.text,
+      );
 
-    final user = credential.user;
+      final user = credential.user;
 
-    if (user == null) {
-      throw FirebaseAuthException(code: 'no-user', message: 'User not found');
+      if (user == null) {
+        throw FirebaseAuthException(code: 'no-user', message: 'User not found');
+      }
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final userType = doc.data()?['userType'] ?? 'user';
+
+      setState(() => isLoading = false);
+
+      if (!mounted) return;
+
+      // Route based on user type
+      String routeName = 'userHome'; // default
+      if (userType == 'blind' || userType == 'deaf') {
+        routeName = 'userHome';
+      } else if (userType == 'volunteer' ||
+          userType == 'sign_language_expert') {
+        routeName = 'volunteerHome';
+      }
+
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(routeName, (route) => false);
+    } on FirebaseAuthException catch (e) {
+      setState(() => isLoading = false);
+      await flutterTts.speak(e.message ?? "Login failed");
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message ?? 'Login failed')));
     }
-
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final userType = doc.data()?['userType'] ?? 'user';
-
-    setState(() => isLoading = false);
-
-    if (!mounted) return;
-
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      userType == 'user' ? 'userHome' : 'volunteerHome',
-      (route) => false,
-    );
-  } on FirebaseAuthException catch (e) {
-    setState(() => isLoading = false);
-    await flutterTts.speak(e.message ?? "Login failed");
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.message ?? 'Login failed')),
-    );
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +267,10 @@ Navigator.of(context).pushAndRemoveUntil(
         body: isLoading
             ? const Center(child: CircularProgressIndicator())
             : ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 70),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 70,
+                ),
                 children: [
                   Form(
                     key: formKey,
@@ -241,8 +284,9 @@ Navigator.of(context).pushAndRemoveUntil(
                           myController: email,
                           focusNode: emailFocus,
                           flutterTts: flutterTts,
-                          validator: (val) =>
-                              val == null || val.isEmpty ? "Please enter your email" : null,
+                          validator: (val) => val == null || val.isEmpty
+                              ? "Please enter your email"
+                              : null,
                         ),
                         const SizedBox(height: 20),
 
@@ -273,9 +317,10 @@ Navigator.of(context).pushAndRemoveUntil(
                             child: const Text(
                               "Forget Password?",
                               style: TextStyle(
-                                  color: Color.fromARGB(255, 165, 177, 182),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold),
+                                color: Color.fromARGB(255, 165, 177, 182),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -284,9 +329,14 @@ Navigator.of(context).pushAndRemoveUntil(
                         // Login button
                         Center(
                           child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(minimumSize: const Size(300, 50)),
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size(300, 50),
+                            ),
                             onPressed: loginWithEmail,
-                            child: const Text('Login', style: TextStyle(color: Colors.white)),
+                            child: const Text(
+                              'Login',
+                              style: TextStyle(color: Colors.white),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 30),
@@ -304,7 +354,9 @@ Navigator.of(context).pushAndRemoveUntil(
                             Customicon(
                               myIcon: FontAwesomeIcons.google,
                               iconColor: Colors.red,
-                              onPressed: isLoadingWithGoogle ? null : signInWithGoogle,
+                              onPressed: isLoadingWithGoogle
+                                  ? null
+                                  : signInWithGoogle,
                               isLoading: isLoadingWithGoogle,
                             ),
                           ],

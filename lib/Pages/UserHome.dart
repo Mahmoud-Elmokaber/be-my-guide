@@ -1,4 +1,5 @@
 import 'package:app/Pages/settingPage.dart';
+import 'package:app/AgoraLogic/agora_logic.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,8 @@ class _UserHomeState extends State<UserHome> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FlutterTts flutterTts = FlutterTts();
+
+  AgoraLogic? _agoraLogic;
 
   String connectionStatus = "Disconnected";
   bool inCall = false;
@@ -75,22 +78,81 @@ class _UserHomeState extends State<UserHome> {
     }
   }
 
-  void requestAssistance() {
+  Future<void> requestAssistance() async {
     setState(() {
       inCall = true;
       connectionStatus = "Connecting...";
     });
     _speak("Requesting visual assistance, connecting now");
 
-    Future.delayed(const Duration(seconds: 2), () {
+    // Initialize Agora
+    // TODO: Replace with your actual Agora App ID
+    const String agoraAppId = 'ad016719e08149d3b8176049cbbe8024';
+    _agoraLogic = AgoraLogic(
+      appId: agoraAppId,
+      channel:
+          'test_channel', // TODO: Use a dynamic channel ID based on the request
+      onRemoteUserJoined: (uid) {
+        if (mounted) {
+          setState(() {
+            // Trigger rebuild to show remote video
+          });
+        }
+      },
+      onRemoteUserLeft: (uid) {
+        if (mounted) {
+          setState(() {
+            // Trigger rebuild to hide remote video
+          });
+        }
+      },
+    );
+
+    try {
+      await _agoraLogic!.initialize();
+      await _agoraLogic!.requestPermissions();
+      await _agoraLogic!.setupLocalVideo();
+      await _agoraLogic!.joinChannel();
+  /// this is the permission issue
+      // Create request in Firestore
+      final user = _auth.currentUser;
+      if (user != null) {
+        debugPrint("Creating request for user: ${user.uid}");
+        await _firestore.collection('requests').add({
+          'userId': user.uid,
+          'userName': userName,
+          'userPhoto': null, // TODO: Add user photo if available
+          'status': 'pending',
+          'createdAt': FieldValue.serverTimestamp(),
+          'channelId': 'test_channel',
+        });
+        debugPrint("Request created successfully");
+      }
+
       setState(() {
         connectionStatus = "Live";
       });
       _speak("Call is live");
-    });
+    } catch (e) {
+      debugPrint("Error initializing Agora or Firestore: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Connection failed: $e")));
+      }
+      setState(() {
+        inCall = false;
+        connectionStatus = "Failed";
+      });
+      _speak("Failed to connect call");
+    }
   }
 
-  void endCall() {
+  void endCall() async {
+    if (_agoraLogic != null) {
+      await _agoraLogic!.cleanup();
+      _agoraLogic = null;
+    }
     setState(() {
       inCall = false;
       connectionStatus = "Disconnected";
@@ -104,6 +166,7 @@ class _UserHomeState extends State<UserHome> {
     setState(() {
       isMuted = !isMuted;
     });
+    _agoraLogic?.toggleLocalAudio(isMuted);
     _speak(isMuted ? "Microphone muted" : "Microphone unmuted");
   }
 
@@ -111,6 +174,7 @@ class _UserHomeState extends State<UserHome> {
     setState(() {
       isCameraOff = !isCameraOff;
     });
+    _agoraLogic?.toggleLocalVideo(isCameraOff);
     _speak(isCameraOff ? "Camera turned off" : "Camera turned on");
   }
 
@@ -119,7 +183,9 @@ class _UserHomeState extends State<UserHome> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('userType');
     if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('splashPage', (route) => false);
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil('splashPage', (route) => false);
   }
 
   void _openSettings() {
@@ -156,7 +222,10 @@ class _UserHomeState extends State<UserHome> {
         backgroundColor: appBarColor,
         title: Semantics(
           header: true,
-          child: const Text("SeeTogether", style: TextStyle(fontWeight: FontWeight.bold)),
+          child: const Text(
+            "be my guide",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
         actions: [
           Semantics(
@@ -182,7 +251,10 @@ class _UserHomeState extends State<UserHome> {
                   children: [
                     Text("Hello, $userName!", style: headerTextStyle),
                     const SizedBox(height: 4),
-                    Text("You can request visual assistance below.", style: subtitleTextStyle),
+                    Text(
+                      "You can request visual assistance below.",
+                      style: subtitleTextStyle,
+                    ),
                     const SizedBox(height: 30),
                   ],
                 ),
@@ -198,9 +270,17 @@ class _UserHomeState extends State<UserHome> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  if (inCall) Text(connectionStatus, style: TextStyle(color: highlightColor, fontWeight: FontWeight.bold, fontSize: 18)),
-                  if (inCall) const SizedBox(height: 10),
                   if (inCall)
+                    Text(
+                      connectionStatus,
+                      style: TextStyle(
+                        color: highlightColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  if (inCall) const SizedBox(height: 10),
+                  if (inCall && _agoraLogic != null)
                     Container(
                       height: 200,
                       width: double.infinity,
@@ -208,10 +288,13 @@ class _UserHomeState extends State<UserHome> {
                         color: Colors.grey[850],
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Center(child: Text('Volunteer Video', style: TextStyle(color: Colors.grey[400]))),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _agoraLogic!.remoteVideoView(),
+                      ),
                     ),
-                  if (inCall) const SizedBox(height: 10),
-                  if (inCall)
+                  if (inCall && _agoraLogic != null) const SizedBox(height: 10),
+                  if (inCall && _agoraLogic != null)
                     Container(
                       height: 100,
                       width: 140,
@@ -219,7 +302,10 @@ class _UserHomeState extends State<UserHome> {
                         color: Colors.grey[800],
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Center(child: Text('Your Self-View', style: TextStyle(color: Colors.grey[400]))),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: _agoraLogic!.localVideoView(),
+                      ),
                     ),
                   if (inCall) const SizedBox(height: 10),
                   if (inCall)
@@ -227,7 +313,9 @@ class _UserHomeState extends State<UserHome> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Semantics(
-                          label: isMuted ? 'Unmute microphone' : 'Mute microphone',
+                          label: isMuted
+                              ? 'Unmute microphone'
+                              : 'Mute microphone',
                           button: true,
                           child: IconButton(
                             icon: Icon(isMuted ? Icons.mic_off : Icons.mic),
@@ -238,10 +326,14 @@ class _UserHomeState extends State<UserHome> {
                         ),
                         const SizedBox(width: 20),
                         Semantics(
-                          label: isCameraOff ? 'Turn camera on' : 'Turn camera off',
+                          label: isCameraOff
+                              ? 'Turn camera on'
+                              : 'Turn camera off',
                           button: true,
                           child: IconButton(
-                            icon: Icon(isCameraOff ? Icons.videocam_off : Icons.videocam),
+                            icon: Icon(
+                              isCameraOff ? Icons.videocam_off : Icons.videocam,
+                            ),
                             color: highlightColor,
                             iconSize: 32,
                             onPressed: toggleCamera,
@@ -266,7 +358,10 @@ class _UserHomeState extends State<UserHome> {
                             icon: const Icon(Icons.cameraswitch),
                             color: highlightColor,
                             iconSize: 32,
-                            onPressed: () => _speak("Switching camera"),
+                            onPressed: () {
+                              _agoraLogic?.switchCamera();
+                              _speak("Switching camera");
+                            },
                           ),
                         ),
                       ],
@@ -276,14 +371,26 @@ class _UserHomeState extends State<UserHome> {
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(60),
                         backgroundColor: highlightColor,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       onPressed: requestAssistance,
                       child: Column(
                         children: const [
-                          Text("Request Visual Assistance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,color: Colors.white)),
+                          Text(
+                            "Request Visual Assistance",
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                           SizedBox(height: 4),
-                          Text("Call a volunteer now", style: TextStyle(fontSize: 14 ,color: Colors.white)),
+                          Text(
+                            "Call a volunteer now",
+                            style: TextStyle(fontSize: 14, color: Colors.white),
+                          ),
                         ],
                       ),
                     ),
@@ -308,23 +415,50 @@ class _UserHomeState extends State<UserHome> {
                         physics: const NeverScrollableScrollPhysics(),
                         shrinkWrap: true,
                         itemCount: requests.length,
-                        separatorBuilder: (_, __) => const Divider(color: Colors.grey),
+                        separatorBuilder: (_, __) =>
+                            const Divider(color: Colors.grey),
                         itemBuilder: (context, index) {
                           final req = requests[index];
                           return Semantics(
-                            label: 'Request with volunteer ${req["volunteerName"]}, status: ${req["status"]}',
+                            label:
+                                'Request with volunteer ${req["volunteerName"]}, status: ${req["status"]}',
                             child: ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: Colors.grey[700],
-                                backgroundImage: req["volunteerPhoto"] != null ? NetworkImage(req["volunteerPhoto"]) : null,
+                                backgroundImage: req["volunteerPhoto"] != null
+                                    ? NetworkImage(req["volunteerPhoto"])
+                                    : null,
                                 child: req["volunteerPhoto"] == null
-                                    ? Text(req["volunteerName"].toString().substring(0, 1).toUpperCase(), style: TextStyle(color: Colors.grey[300], fontWeight: FontWeight.bold))
+                                    ? Text(
+                                        req["volunteerName"]
+                                            .toString()
+                                            .substring(0, 1)
+                                            .toUpperCase(),
+                                        style: TextStyle(
+                                          color: Colors.grey[300],
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
                                     : null,
                               ),
-                              title: Text(req["volunteerName"], style: TextStyle(color: Colors.grey[100], fontWeight: FontWeight.w600)),
-                              subtitle: Text("Status: ${req["status"]}", style: TextStyle(color: Colors.grey[400])),
-                              trailing: Text(_formatTimestamp(req["timestamp"]), style: TextStyle(color: Colors.grey[400])),
-                              onTap: () => _speak("Request with volunteer ${req["volunteerName"]}, status ${req["status"]}"),
+                              title: Text(
+                                req["volunteerName"],
+                                style: TextStyle(
+                                  color: Colors.grey[100],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                "Status: ${req["status"]}",
+                                style: TextStyle(color: Colors.grey[400]),
+                              ),
+                              trailing: Text(
+                                _formatTimestamp(req["timestamp"]),
+                                style: TextStyle(color: Colors.grey[400]),
+                              ),
+                              onTap: () => _speak(
+                                "Request with volunteer ${req["volunteerName"]}, status ${req["status"]}",
+                              ),
                             ),
                           );
                         },
