@@ -178,7 +178,8 @@ This project is licensed under the ⟨LICENSE_NAME⟩ — see the LICENSE file f
 ## Contact
 Maintainer: Mahmoud Elmokaber
 - GitHub: https://github.com/Mahmoud-Elmokaber
-- Email: ⟨your-email@example.com⟩
+- Email: mahmoudelmokaber4@gmail.com
 
 ## A note on customizing this README
 I created this README as a comprehensive starting template for be-my-guide. Replace placeholder sections (tech stack, commands, env vars, and examples) with concrete values from your repository. Add badges, screenshots, and a demo link once available.
+
