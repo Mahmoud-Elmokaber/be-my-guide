@@ -17,7 +17,7 @@ class AgoraLogic {
 
   final String appId;
   String channel;
-  String? token;
+  String? token;  //nullable to make it optional 
   final Function(int uid)? onRemoteUserJoined;
   final Function(int uid)? onRemoteUserLeft;
 

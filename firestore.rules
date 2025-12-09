@@ -51,8 +51,7 @@ service cloud.firestore {
 
       // Allow volunteers (both types) to update status to accepted/completed
       allow update: if request.auth != null
-                    && isVolunteer()
-                    && (request.resource.data.status in ['accepted', 'completed']);
+                    && isVolunteer();
     }
 
   }

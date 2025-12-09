@@ -54,11 +54,14 @@ class _VolunteerHomeState extends State<VolunteerHome> {
       try {
         final doc = await _firestore.collection('users').doc(user.uid).get();
         if (doc.exists) {
+          debugPrint("Volunteer loaded: ${doc.data()}"); // Debug print
           setState(() {
             userName = doc.data()?['firstName'] ?? 'Volunteer';
             userEmail = doc.data()?['email'] ?? '';
           });
           await _speak("Welcome $userName!");
+        } else {
+          debugPrint("Volunteer document does not exist!");
         }
       } catch (e) {
         debugPrint('Failed to load user data: $e');
@@ -90,7 +93,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
     const String agoraAppId = 'ad016719e08149d3b8176049cbbe8024';
     _agoraLogic = AgoraLogic(
       appId: agoraAppId,
-      channel: request['channelId'],
+      channel: request['channelId'] ?? 'test_channel',
       onRemoteUserJoined: (uid) {
         if (mounted) {
           setState(() {
@@ -341,7 +344,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                 'timestamp': data['createdAt']?.toDate() ?? DateTime.now(),
                 'requestId': doc.id,
                 'requestStatus': data['status'] ?? 'pending',
-                'channelId': data['channelId'] ?? 'test_channel',
+                'channelId': data['channelId'],
               };
             }).toList();
 

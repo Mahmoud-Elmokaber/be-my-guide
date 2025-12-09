@@ -24,7 +24,7 @@ class _UserHomeState extends State<UserHome> {
   bool inCall = false;
   bool isMuted = false;
   bool isCameraOff = false;
-
+  String? currentRequestId;
   String userName = '';
   String userEmail = '';
   List<Map<String, dynamic>> requests = [];
@@ -79,6 +79,9 @@ class _UserHomeState extends State<UserHome> {
   }
 
   Future<void> requestAssistance() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
     setState(() {
       inCall = true;
       connectionStatus = "Connecting...";
@@ -88,10 +91,11 @@ class _UserHomeState extends State<UserHome> {
     // Initialize Agora
     // TODO: Replace with your actual Agora App ID
     const String agoraAppId = 'ad016719e08149d3b8176049cbbe8024';
+    final String channelId = user.uid;
+
     _agoraLogic = AgoraLogic(
       appId: agoraAppId,
-      channel:
-          'test_channel', // TODO: Use a dynamic channel ID based on the request
+      channel: channelId,
       onRemoteUserJoined: (uid) {
         if (mounted) {
           setState(() {
@@ -113,21 +117,21 @@ class _UserHomeState extends State<UserHome> {
       await _agoraLogic!.requestPermissions();
       await _agoraLogic!.setupLocalVideo();
       await _agoraLogic!.joinChannel();
-  /// this is the permission issue
+
+      /// this is the permission issue
       // Create request in Firestore
-      final user = _auth.currentUser;
-      if (user != null) {
-        debugPrint("Creating request for user: ${user.uid}");
-        await _firestore.collection('requests').add({
-          'userId': user.uid,
-          'userName': userName,
-          'userPhoto': null, // TODO: Add user photo if available
-          'status': 'pending',
-          'createdAt': FieldValue.serverTimestamp(),
-          'channelId': 'test_channel',
-        });
-        debugPrint("Request created successfully");
-      }
+      debugPrint("Creating request for user: ${user.uid}");
+      final docRef = await _firestore.collection('requests').add({
+        'userId': user.uid,
+        'userName': userName,
+        'userPhoto': null, // TODO: Add user photo if available
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+        'channelId': channelId,
+      });
+      currentRequestId = docRef.id;
+
+      debugPrint("Request created successfully");
 
       setState(() {
         connectionStatus = "Live";
@@ -159,6 +163,18 @@ class _UserHomeState extends State<UserHome> {
       isMuted = false;
       isCameraOff = false;
     });
+    if (currentRequestId != null) {
+      _firestore
+          .collection('requests')
+          .doc(currentRequestId)
+          .update({
+            'status': 'completed',
+            'completedAt': FieldValue.serverTimestamp(),
+          })
+          .catchError((e) {
+            debugPrint('Failed to update request status on call end: $e');
+          });
+    }
     _speak("Call ended");
   }
 
@@ -255,7 +271,7 @@ class _UserHomeState extends State<UserHome> {
                       "You can request visual assistance below.",
                       style: subtitleTextStyle,
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height:30),
                   ],
                 ),
               ),
@@ -369,7 +385,7 @@ class _UserHomeState extends State<UserHome> {
                   if (!inCall)
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(60),
+                        minimumSize: const Size.fromHeight(400),
                         backgroundColor: highlightColor,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -398,75 +414,7 @@ class _UserHomeState extends State<UserHome> {
               ),
             ),
 
-            if (!inCall) ...[
-              const SizedBox(height: 30),
-              Semantics(
-                container: true,
-                label: 'Your active and past assistance requests',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Your Requests", style: headerTextStyle),
-                    const SizedBox(height: 12),
-                    if (requests.isEmpty)
-                      Text("No requests yet.", style: subtitleTextStyle)
-                    else
-                      ListView.separated(
-                        physics: const NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        itemCount: requests.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(color: Colors.grey),
-                        itemBuilder: (context, index) {
-                          final req = requests[index];
-                          return Semantics(
-                            label:
-                                'Request with volunteer ${req["volunteerName"]}, status: ${req["status"]}',
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Colors.grey[700],
-                                backgroundImage: req["volunteerPhoto"] != null
-                                    ? NetworkImage(req["volunteerPhoto"])
-                                    : null,
-                                child: req["volunteerPhoto"] == null
-                                    ? Text(
-                                        req["volunteerName"]
-                                            .toString()
-                                            .substring(0, 1)
-                                            .toUpperCase(),
-                                        style: TextStyle(
-                                          color: Colors.grey[300],
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              title: Text(
-                                req["volunteerName"],
-                                style: TextStyle(
-                                  color: Colors.grey[100],
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                "Status: ${req["status"]}",
-                                style: TextStyle(color: Colors.grey[400]),
-                              ),
-                              trailing: Text(
-                                _formatTimestamp(req["timestamp"]),
-                                style: TextStyle(color: Colors.grey[400]),
-                              ),
-                              onTap: () => _speak(
-                                "Request with volunteer ${req["volunteerName"]}, status ${req["status"]}",
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ],
+            if (!inCall) ...[const SizedBox(height: 30)],
           ],
         ),
       ),
