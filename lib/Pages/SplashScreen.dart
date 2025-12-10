@@ -40,7 +40,7 @@ class _SplashScreenState extends State<SplashScreen> {
       child: ElevatedButton(
         onPressed: () async {
           // اقرأ النص باستخدام TTS قبل تنفيذ الأكشن
-          await _speak("$title, $subtitle");
+           _speak("$title, $subtitle");
           onTap();
         },
         style: ElevatedButton.styleFrom(
@@ -88,7 +88,7 @@ class _SplashScreenState extends State<SplashScreen> {
       hint: "Double tap to activate",
       child: ElevatedButton(
         onPressed: () async {
-          await _speak("$title, $subtitle");
+           _speak("$title, $subtitle");
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('userType', userType);
           if (mounted) {
@@ -133,12 +133,12 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _showUserRoleDialog() async {
-    await _speak("Select your role. Blind or Deaf");
+     _speak("Select your role. Blind or Deaf");
     setState(() => selectedRole = 'user');
   }
 
   Future<void> _showVolunteerRoleDialog() async {
-    await _speak(
+     _speak(
       "Select your volunteer role. General volunteer or Sign language expert",
     );
     setState(() => selectedRole = 'volunteer');

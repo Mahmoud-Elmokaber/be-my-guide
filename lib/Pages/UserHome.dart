@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:app/Pages/settingPage.dart';
 import 'package:app/AgoraLogic/agora_logic.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,6 +20,7 @@ class _UserHomeState extends State<UserHome> {
   final FlutterTts flutterTts = FlutterTts();
 
   AgoraLogic? _agoraLogic;
+  Timer? _reminderTimer;
 
   String connectionStatus = "Disconnected";
   bool inCall = false;
@@ -27,6 +29,7 @@ class _UserHomeState extends State<UserHome> {
   String? currentRequestId;
   String userName = '';
   String userEmail = '';
+  String userType = '';
   List<Map<String, dynamic>> requests = [];
 
   @override
@@ -34,6 +37,22 @@ class _UserHomeState extends State<UserHome> {
     super.initState();
     _loadUserData();
     _loadUserRequests();
+    _startReminderTimer();
+  }
+
+  @override
+  void dispose() {
+    _reminderTimer?.cancel();
+    _agoraLogic?.cleanup();
+    super.dispose();
+  }
+
+  void _startReminderTimer() {
+    _reminderTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (!inCall && mounted) {
+        _speak("press on the middle of the screen to get assistance");
+      }
+    });
   }
 
   Future<void> _speak(String text) async {
@@ -48,6 +67,7 @@ class _UserHomeState extends State<UserHome> {
       if (doc.exists) {
         setState(() {
           userName = doc.data()?['firstName'] ?? 'User';
+          userType = doc.data()?['userType'] ?? '';
         });
         await _speak("Welcome $userName!");
       }
@@ -124,6 +144,7 @@ class _UserHomeState extends State<UserHome> {
       final docRef = await _firestore.collection('requests').add({
         'userId': user.uid,
         'userName': userName,
+        'userType': userType,
         'userPhoto': null, // TODO: Add user photo if available
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
@@ -204,9 +225,10 @@ class _UserHomeState extends State<UserHome> {
     ).pushNamedAndRemoveUntil('splashPage', (route) => false);
   }
 
-  void _openSettings() {
+  Future<void> _openSettings() async {
     _speak("Opening settings");
-    Navigator.of(context).push(
+    _reminderTimer?.cancel();
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => SettingsPage(
           userName: userName,
@@ -215,6 +237,9 @@ class _UserHomeState extends State<UserHome> {
         ),
       ),
     );
+    if (mounted) {
+      _startReminderTimer();
+    }
   }
 
   @override
@@ -271,7 +296,7 @@ class _UserHomeState extends State<UserHome> {
                       "You can request visual assistance below.",
                       style: subtitleTextStyle,
                     ),
-                    const SizedBox(height:30),
+                    const SizedBox(height: 30),
                   ],
                 ),
               ),
@@ -419,16 +444,5 @@ class _UserHomeState extends State<UserHome> {
         ),
       ),
     );
-  }
-
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inMinutes < 1) return 'Just now';
-    if (difference.inMinutes < 60) return '${difference.inMinutes} min ago';
-    if (difference.inHours < 24) return '${difference.inHours} hr ago';
-
-    return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
   }
 }

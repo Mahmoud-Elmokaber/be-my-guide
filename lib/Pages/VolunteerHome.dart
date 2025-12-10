@@ -22,6 +22,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
 
   String userName = '';
   String userEmail = '';
+  String userType = '';
 
   bool inCall = false;
   bool isMuted = false;
@@ -57,6 +58,7 @@ class _VolunteerHomeState extends State<VolunteerHome> {
           setState(() {
             userName = doc.data()?['firstName'] ?? 'Volunteer';
             userEmail = doc.data()?['email'] ?? '';
+            userType = doc.data()?['userType'] ?? '';
           });
           await _speak("Welcome $userName!");
         }
@@ -67,11 +69,17 @@ class _VolunteerHomeState extends State<VolunteerHome> {
   }
 
   Stream<QuerySnapshot> getRequestsStream() {
-    return _firestore
+    Query query = _firestore
         .collection('requests')
-        .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+        .where('status', isEqualTo: 'pending');
+
+    if (userType == 'volunteer') {
+      query = query.where('userType', isEqualTo: 'blind');
+    } else if (userType == 'sign_language_expert') {
+      query = query.where('userType', isEqualTo: 'deaf');
+    }
+
+    return query.orderBy('createdAt', descending: true).snapshots();
   }
 
   Future<void> _acceptRequest(Map<String, dynamic> request) async {
