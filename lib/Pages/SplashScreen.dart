@@ -18,13 +18,13 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    // رسالة ترحيبية أول ما الصفحة تظهر
+  
     _speak("Welcome to be my guide app splash screen");
   }
 
-  // دالة لتشغيل الـ TTS
+  
   Future<void> _speak(String text) async {
-    await flutterTts.stop(); // وقف أي TTS شغال
+    await flutterTts.stop(); 
     await flutterTts.speak(text);
   }
 
@@ -39,7 +39,6 @@ class _SplashScreenState extends State<SplashScreen> {
       hint: "Double tap to activate",
       child: ElevatedButton(
         onPressed: () async {
-          // اقرأ النص باستخدام TTS قبل تنفيذ الأكشن
            _speak("$title, $subtitle");
           onTap();
         },
@@ -160,7 +159,7 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               const SizedBox(height: 26),
 
-              // App Title مع Semantics
+             
               Semantics(
                 header: true,
                 label: "App name be my guide",
@@ -183,7 +182,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Logo image مع Semantics
+                     
                       Semantics(
                         label: 'App logo',
                         image: true,

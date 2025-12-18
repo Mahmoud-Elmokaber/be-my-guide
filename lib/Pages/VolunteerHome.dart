@@ -346,77 +346,49 @@ class _VolunteerHomeState extends State<VolunteerHome> {
               };
             }).toList();
 
-            return RefreshIndicator(
-              onRefresh: () async {
-                await Future.delayed(const Duration(seconds: 1));
-              },
-              child: ListView(
-                padding: const EdgeInsets.all(20),
+            if (inCall) {
+              return Stack(
                 children: [
-                  if (!inCall) ...[
-                    Text("Hello, $userName!", style: headerTextStyle),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Users requesting assistance:",
-                      style: subtitleTextStyle,
+                  if (_agoraLogic != null)
+                    Positioned.fill(child: _agoraLogic!.remoteVideoView()),
+                  if (_agoraLogic != null)
+                    Positioned(
+                      bottom: 120,
+                      right: 20,
+                      width: 120,
+                      height: 160,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: _agoraLogic!.localVideoView(),
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (!inCall)
-                    requests.isEmpty
-                        ? Text("No pending requests.", style: subtitleTextStyle)
-                        : ListView.separated(
-                            physics: const NeverScrollableScrollPhysics(),
-                            shrinkWrap: true,
-                            itemCount: requests.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(color: Colors.grey),
-                            itemBuilder: (context, index) {
-                              return _buildRequestTile(requests[index]);
-                            },
-                          ),
-                  if (inCall) ...[
-                    const SizedBox(height: 20),
-                    Center(
+                  Positioned(
+                    top: 50,
+                    left: 0,
+                    right: 0,
+                    child: Center(
                       child: Text(
                         connectionStatus,
                         style: TextStyle(
                           color: highlightColor,
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
+                          shadows: const [
+                            Shadow(
+                              blurRadius: 4,
+                              color: Colors.black,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    if (_agoraLogic != null)
-                      Container(
-                        height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[850],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: _agoraLogic!.remoteVideoView(),
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    if (_agoraLogic != null)
-                      Container(
-                        height: 100,
-                        width: 140,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[800],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: _agoraLogic!.localVideoView(),
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    Row(
+                  ),
+                  Positioned(
+                    bottom: 30,
+                    left: 0,
+                    right: 0,
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Semantics(
@@ -473,7 +445,37 @@ class _VolunteerHomeState extends State<VolunteerHome> {
                         ),
                       ],
                     ),
-                  ],
+                  ),
+                ],
+              );
+            }
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                await Future.delayed(const Duration(seconds: 1));
+              },
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  Text("Hello, $userName!", style: headerTextStyle),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Users requesting assistance:",
+                    style: subtitleTextStyle,
+                  ),
+                  const SizedBox(height: 20),
+                  requests.isEmpty
+                      ? Text("No pending requests.", style: subtitleTextStyle)
+                      : ListView.separated(
+                          physics: const NeverScrollableScrollPhysics(),
+                          shrinkWrap: true,
+                          itemCount: requests.length,
+                          separatorBuilder: (_, __) =>
+                              const Divider(color: Colors.grey),
+                          itemBuilder: (context, index) {
+                            return _buildRequestTile(requests[index]);
+                          },
+                        ),
                 ],
               ),
             );

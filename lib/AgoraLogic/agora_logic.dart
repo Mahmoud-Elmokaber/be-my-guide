@@ -4,7 +4,7 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Helper class that encapsulates Agora engine lifecycle and provides
+/// Helper class that encapsulates Agora engine and provides
 /// widgets for local/remote video views.
 class AgoraLogic {
   AgoraLogic({
@@ -25,7 +25,7 @@ class AgoraLogic {
   bool localUserJoined = false;
   int? remoteUid;
 
-  /// Initialize the Agora engine. Must be called before other operations.
+  /// Initialize the Agora engine.
   Future<void> initialize() async {
     _engine = createAgoraRtcEngine();
     await _engine.initialize(RtcEngineContext(appId: appId));
@@ -102,7 +102,7 @@ class AgoraLogic {
         rtcEngine: _engine,
         canvas: const VideoCanvas(
           uid: 0,
-          renderMode: RenderModeType.renderModeHidden,
+          renderMode: RenderModeType.renderModeHidden, // to make the video fit in the window
         ),
       ),
     );

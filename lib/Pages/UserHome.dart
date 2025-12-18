@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:app/Pages/settingPage.dart';
 import 'package:app/AgoraLogic/agora_logic.dart';
 import 'package:app/Services/UserService.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
@@ -60,7 +60,7 @@ class _UserHomeState extends State<UserHome> {
   void _startReminderTimer() {
     _reminderTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (!inCall && mounted) {
-        _speak("press on the middle of the screen to get assistance");
+        _speak("tap on the middle of the screen to get assistance");
       }
     });
   }
@@ -111,7 +111,6 @@ class _UserHomeState extends State<UserHome> {
     _speak("Requesting visual assistance, connecting now");
 
     // Initialize Agora
-    // TODO: Replace with your actual Agora App ID
     const String agoraAppId = 'ad016719e08149d3b8176049cbbe8024';
     final String channelId = user.uid; // Use user ID as channel ID
 
@@ -272,76 +271,49 @@ class _UserHomeState extends State<UserHome> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            if (!inCall) ...[
-              Semantics(
-                container: true,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Hello, $userName!", style: headerTextStyle),
-                    const SizedBox(height: 4),
-                    Text(
-                      "You can request visual assistance below.",
-                      style: subtitleTextStyle,
-                    ),
-                    const SizedBox(height: 30),
-                  ],
-                ),
-              ),
-            ],
-
-            // Video call controls
-            Semantics(
-              container: true,
-              label: inCall
-                  ? 'Video call in progress. Connection status: $connectionStatus'
-                  : 'Video call controls',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
+        child: inCall
+            ? Stack(
                 children: [
-                  if (inCall)
-                    Text(
-                      connectionStatus,
-                      style: TextStyle(
-                        color: highlightColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                  if (inCall) const SizedBox(height: 10),
-                  if (inCall && _agoraLogic != null)
-                    Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[850],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: _agoraLogic!.remoteVideoView(),
-                      ),
-                    ),
-                  if (inCall && _agoraLogic != null) const SizedBox(height: 10),
-                  if (inCall && _agoraLogic != null)
-                    Container(
-                      height: 100,
-                      width: 140,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[800],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                  if (_agoraLogic != null)
+                    Positioned.fill(child: _agoraLogic!.remoteVideoView()),
+                  if (_agoraLogic != null)
+                    Positioned(
+                      bottom: 120,
+                      right: 20,
+                      width: 120,
+                      height: 160,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: _agoraLogic!.localVideoView(),
                       ),
                     ),
-                  if (inCall) const SizedBox(height: 10),
-                  if (inCall)
-                    Row(
+                  Positioned(
+                    top: 50,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Text(
+                        connectionStatus,
+                        style: TextStyle(
+                          color: highlightColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          shadows: const [
+                            Shadow(
+                              blurRadius: 4,
+                              color: Colors.black,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 30,
+                    left: 0,
+                    right: 0,
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Semantics(
@@ -398,41 +370,57 @@ class _UserHomeState extends State<UserHome> {
                         ),
                       ],
                     ),
-                  if (!inCall)
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(400),
-                        backgroundColor: highlightColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  ),
+                ],
+              )
+            : ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  Semantics(
+                    container: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Hello, $userName!", style: headerTextStyle),
+                        const SizedBox(height: 4),
+                        Text(
+                          "You can request visual assistance below.",
+                          style: subtitleTextStyle,
                         ),
-                      ),
-                      onPressed: requestAssistance,
-                      child: Column(
-                        children: const [
-                          Text(
-                            "Request Visual Assistance",
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            "Call a volunteer now",
-                            style: TextStyle(fontSize: 14, color: Colors.white),
-                          ),
-                        ],
+                        const SizedBox(height: 30),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(400),
+                      backgroundColor: highlightColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
+                    onPressed: requestAssistance,
+                    child: Column(
+                      children: const [
+                        Text(
+                          "Request Visual Assistance",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "Call a volunteer now",
+                          style: TextStyle(fontSize: 14, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 30),
                 ],
               ),
-            ),
-
-            if (!inCall) ...[const SizedBox(height: 30)],
-          ],
-        ),
       ),
     );
   }
